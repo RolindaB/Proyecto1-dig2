@@ -5,7 +5,7 @@
 #define TRIG_PIN PD2
 #define ECHO_PIN PD3
 #define OUT_PIN PD4 // No se usa en el código proporcionado
-#define LED_PIN PC4 // Asumiendo que el LED está conectado al pin PC4
+#define LED_PIN PC3 // Asumiendo que el LED está conectado al pin PC4
 
 void init_ultrasonic() {
 	// Configura TRIG_PIN como salida

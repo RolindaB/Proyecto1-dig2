@@ -102,7 +102,7 @@ Disassembly of section .text:
 
 000000a6 <init_ultrasonic>:
 #define OUT_PIN PD4 // No se usa en el código proporcionado
-#define LED_PIN PC4 // Asumiendo que el LED está conectado al pin PC4
+#define LED_PIN PC3 // Asumiendo que el LED está conectado al pin PC4
 
 void init_ultrasonic() {
 	// Configura TRIG_PIN como salida
@@ -113,7 +113,7 @@ void init_ultrasonic() {
 	// Configura LED_PIN como salida
 	DDRC |= (1 << LED_PIN);
   ac:	87 b1       	in	r24, 0x07	; 7
-  ae:	80 61       	ori	r24, 0x10	; 16
+  ae:	88 60       	ori	r24, 0x08	; 8
   b0:	87 b9       	out	0x07, r24	; 7
 	// Configura ECHO_PIN y OUT_PIN como entrada
 	DDRD &= ~(1 << ECHO_PIN);
@@ -326,7 +326,7 @@ void loop() {
 		//UART_send_string("Medición fallida\n\r");
 		PORTC &= ~(1 << LED_PIN); // Apagar el LED si la medición falla
  180:	88 b1       	in	r24, 0x08	; 8
- 182:	8f 7e       	andi	r24, 0xEF	; 239
+ 182:	87 7f       	andi	r24, 0xF7	; 247
  184:	88 b9       	out	0x08, r24	; 8
  186:	4f c0       	rjmp	.+158    	; 0x226 <loop+0xcc>
 		} else {
@@ -392,7 +392,7 @@ void loop() {
  1fc:	88 f4       	brcc	.+34     	; 0x220 <loop+0xc6>
 			PORTC |= (1 << LED_PIN); // Enciende el LED
  1fe:	88 b1       	in	r24, 0x08	; 8
- 200:	80 61       	ori	r24, 0x10	; 16
+ 200:	88 60       	ori	r24, 0x08	; 8
  202:	88 b9       	out	0x08, r24	; 8
 			UART_send_string("\n\rLED Encendido\n\r");
  204:	8b e1       	ldi	r24, 0x1B	; 27
@@ -418,7 +418,7 @@ void loop() {
 			} else {
 			PORTC &= ~(1 << LED_PIN); // Apaga el LED
  220:	88 b1       	in	r24, 0x08	; 8
- 222:	8f 7e       	andi	r24, 0xEF	; 239
+ 222:	87 7f       	andi	r24, 0xF7	; 247
  224:	88 b9       	out	0x08, r24	; 8
  226:	2f e3       	ldi	r18, 0x3F	; 63
  228:	8d e0       	ldi	r24, 0x0D	; 13
