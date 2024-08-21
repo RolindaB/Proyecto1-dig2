@@ -6,7 +6,7 @@
 #define F_CPU 16000000UL
 #define BAUD_PRESCALE(baud) ((F_CPU / (baud * 16UL)) - 1)
 
-volatile char uart_buffer[128]; // Buffer circular para almacenar datos recibidos por UART
+volatile char uart_buffer[128]; // Buffer circular para UART
 volatile uint8_t uart_head = 0; // Índice de la cabeza del buffer
 volatile uint8_t uart_tail = 0; // Índice de la cola del buffer
 
@@ -41,12 +41,12 @@ void UART_send_number(uint8_t number) {
 
 /* Lee un solo carácter del buffer UART. */
 unsigned char UART_receive(void) {
-	if (uart_head != uart_tail) { // Verificar si hay datos disponibles
+	if (UART_available()) { // Verificar si hay datos disponibles
 		unsigned char data = uart_buffer[uart_tail]; // Leer el carácter del buffer
 		uart_tail = (uart_tail + 1) % sizeof(uart_buffer); // Actualizar el índice de la cola
 		return data; // Devolver el carácter recibido
 		} else {
-		return 0; // No hay datos disponibles
+		return 255; // Retornar un valor especial cuando no hay datos (255 es poco probable en ASCII)
 	}
 }
 
@@ -75,7 +75,10 @@ int UART_available(void) {
 
 // Rutina de interrupción del UART
 ISR(USART_RX_vect) {
-	uart_buffer[uart_head] = UDR0; // Leer el carácter recibido del registro UDR0
-	uart_head = (uart_head + 1) % sizeof(uart_buffer); // Actualizar el índice de la cabeza del buffer
-	uart_buffer[uart_head] = '\0'; // Terminador de cadena
+	uint8_t next_head = (uart_head + 1) % sizeof(uart_buffer);
+
+	if (next_head != uart_tail) { // Solo avanzar si el buffer no está lleno
+		uart_buffer[uart_head] = UDR0; // Leer el carácter recibido del registro UDR0
+		uart_head = next_head; // Actualizar el índice de la cabeza del buffer
+	}
 }

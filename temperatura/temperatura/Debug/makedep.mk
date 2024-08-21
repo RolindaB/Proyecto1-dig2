@@ -4,6 +4,8 @@
 
 I2C\I2C.c
 
+LCD\LCD.c
+
 main.c
 
 UART\UART.c

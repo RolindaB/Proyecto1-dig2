@@ -113,3 +113,32 @@ uint8_t read_from_slave(uint8_t direccion_esclavo, uint8_t *dato) {
 	I2C_Master_Stop(); // Generar condición de STOP
 	return 0; // Éxito
 }
+
+void send_to_slave(uint8_t slave_address, uint8_t data) {
+	// Inicia la comunicación I2C
+	I2C_Master_Start();
+
+	// Envía la dirección del esclavo con el bit de escritura
+	I2C_Master_Write(slave_address << 1);
+
+	// Envía el dato
+	I2C_Master_Write(data);
+
+	// Detiene la comunicación I2C
+	I2C_Master_Stop();
+}
+void send_string_to_slave(uint8_t slave_address, char* str) {
+	// Inicia la comunicación I2C
+	I2C_Master_Start();
+
+	// Envía la dirección del esclavo con el bit de escritura
+	I2C_Master_Write(slave_address << 1);
+
+	// Envía cada carácter de la cadena
+	while(*str) {
+		I2C_Master_Write(*str++);
+	}
+
+	// Detiene la comunicación I2C
+	I2C_Master_Stop();
+}

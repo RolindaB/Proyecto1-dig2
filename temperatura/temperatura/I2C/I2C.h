@@ -34,6 +34,8 @@ uint8_t I2C_Master_Write(uint8_t dato);
 uint8_t I2C_Master_Read(uint8_t *buffer, uint8_t ack);
 // Lee un solo byte del esclavo
 uint8_t read_from_slave(uint8_t direccion_esclavo, uint8_t *dato);
-
-
+//manda un caracter al esclavo
+void send_to_slave(uint8_t slave_address, uint8_t data);
+//manda una cadena al esclavo
+void send_string_to_slave(uint8_t slave_address, char* str);
 #endif /* I2C_H_ */
