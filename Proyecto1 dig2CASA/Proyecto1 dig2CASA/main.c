@@ -12,7 +12,7 @@
 #define OUT_PIN PD4 // No se usa en el código proporcionado
 #define LED_PIN PC3 // Asumiendo que el LED está conectado al pin PC3
 volatile uint8_t dato = 0; // Variable global para almacenar datos recibidos
-volatile uint8_t Abierto = 0; // Estado inicial del servo cerrado
+volatile uint8_t Abierto, estado = 0; // Estado inicial del servo cerrado
 #define SLAVE_ADDR 0x02  // Dirección del esclavo
 
 void init_ultrasonic() {
@@ -80,21 +80,6 @@ ISR(TWI_vect) {
 		case 0x80: // Datos recibidos, ACK enviado
 		case 0x90: // Datos recibidos en llamada general, ACK enviado
 		dato = TWDR;  // Lee el dato recibido del registro de datos
-		if (dato == 'm') {
-			// Cambiar el estado de Abierto
-			Abierto = !Abierto;  // Cambia entre 0 y 1
-			if (Abierto == 1) {
-				PORTC |= (1 << LED_PIN); // Enciende el LED
-				updateDutyCycleB0(75);  // Mover servo al estado abierto
-				UART_send_string("\n\rServo Abierto\n\r");
-				} else {
-				PORTC &= ~(1 << LED_PIN); // Apaga el LED
-				updateDutyCycleB0(25);    // Mover servo al estado cerrado
-				UART_send_string("\n\rServo Cerrado\n\r");
-			}
-			// Limpiar la variable 'dato' para evitar cambios no deseados
-			dato = 0;
-		}
 		TWCR |= (1 << TWINT); // Borra el flag TWINT para continuar
 		break;
 
@@ -135,12 +120,12 @@ void loop() {
 		UART_send_string(duration_str);
 
 		// Ajustar umbrales según la duración filtrada
-		if (duration <= 176 && Abierto == 0) {
+		if (duration <= 176) {
 			Abierto = 1;
 			PORTC |= (1 << LED_PIN); // Enciende el LED
 			updateDutyCycleB0(120);  // Mover servo al estado abierto
 			UART_send_string("\n\rLED Encendido y Servo Abierto\n\r");
-			} else if (duration > 186 && Abierto == 1) {
+			} else if (duration > 186) {
 			Abierto = 0;
 			PORTC &= ~(1 << LED_PIN); // Apaga el LED
 			updateDutyCycleB0(0);    // Mover servo al estado cerrado
@@ -155,7 +140,29 @@ int main(void) {
 	setup();
 	I2C_Slave_Init(SLAVE_ADDR); // Inicializa el esclavo I2C
 	sei(); // Habilitar interrupciones
+	updateDutyCycleB0(0);
 	while (1) {
-		loop();
+		if (dato == 'x')
+		{
+			estado = !estado;
+			dato =0;
+		}
+		if (estado == 1 && dato == 'm') {
+			// Cambiar el estado de Abierto
+			Abierto = !Abierto;  // Cambia entre 0 y 1
+			if (Abierto == 1) {
+				PORTC |= (1 << LED_PIN); // Enciende el LED
+				updateDutyCycleB0(120);  // Mover servo al estado abierto
+				UART_send_string("\n\rServo Abierto\n\r");
+				} else {
+				PORTC &= ~(1 << LED_PIN); // Apaga el LED
+				updateDutyCycleB0(0);    // Mover servo al estado cerrado
+				UART_send_string("\n\rServo Cerrado\n\r");
+			}
+			// Limpiar la variable 'dato' para evitar cambios no deseados
+			dato = 0;
+		 }else if(estado == 0){
+			loop();
+		}
 	}
 }

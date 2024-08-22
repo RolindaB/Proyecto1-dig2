@@ -17,7 +17,7 @@
 uint8_t valorADC = 0;
 uint8_t Abierto = 0;
 uint8_t day;
-volatile uint8_t dato = 0; // Variable global para almacenar datos recibidos
+volatile uint8_t dato, estado = 0; // Variable global para almacenar datos recibidos
 
 //void initPCint0(void);
 
@@ -37,17 +37,6 @@ ISR(TWI_vect) {
 		case 0x80: // Datos recibidos, ACK enviado
 		case 0x90: // Datos recibidos en llamada general, ACK enviado
 		dato = TWDR;  // Lee el dato recibido del registro de datos
-		if (dato == 'n') {
-			// Cambiar el estado de Abierto
-			day = !day;  // Cambia entre 0 y 1
-			if (day == 1) {
-				PORTD |= (1<<PORTD4);
-				} else {
-				PORTD &= ~(1<<PORTD4);
-			}
-			// Limpiar la variable 'dato' para evitar cambios no deseados
-			dato = 0;
-		}
 		TWCR |= (1 << TWINT); // Borra el flag TWINT para continuar
 		break;
 
@@ -67,6 +56,22 @@ ISR(TWI_vect) {
 		break;
 	}
 }
+
+void daySensor(){
+	_delay_ms(50);
+	valorADC = ADC_CHANEL_SELECT(0);
+	
+	if (valorADC <= 90  ){
+		PORTD |= (1<<PORTD4);
+		day = 0;
+		//writeTextUART("Noche");
+		}else if(valorADC > 90 ){
+		PORTD &= ~(1<<PORTD4);
+		//writeTextUART("Dia");
+		day =1;
+	}
+	
+}
 int main(void)
 {
 	cli();
@@ -82,18 +87,22 @@ int main(void)
 	
 	while (1)
 	{
-		_delay_ms(50);
-		valorADC = ADC_CHANEL_SELECT(0);
-		
-		if (valorADC <= 90  && day == 1 ){
-			PORTD |= (1<<PORTD4);
-			day = 0;
-			//writeTextUART("Noche");
-			}else if(valorADC > 90 && day == 0){
-			PORTD &= ~(1<<PORTD4);
-			//writeTextUART("Dia");
-			day =1;
+		if(dato = 'x'){
+			estado = !estado;
+			dato = 0;
 		}
-		
+		if (estado == 1 && dato == 'n') {
+			// Cambiar el estado de Abierto
+			day = !day;  // Cambia entre 0 y 1
+			if (day == 1) {
+				PORTD |= (1<<PORTD4);
+				} else {
+				PORTD &= ~(1<<PORTD4);
+			}
+			// Limpiar la variable 'dato' para evitar cambios no deseados
+			dato = 0;
+		} else if(estado = 0){
+			daySensor();
+		}
 	}
 }

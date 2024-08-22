@@ -19,13 +19,29 @@ char buffer1[16];
 char buffer2[16];
 int16_t temp_value;
 uint8_t abierto, day, ventilador,dato;
-
+volatile uint8_t debounce_counter = 0;
+uint8_t estadoVent =0;
 // Prototipos de funciones
 uint8_t read_temperature(uint8_t *high_byte, uint8_t *low_byte);
 void uartCasa();
 void LCDcasa();
 void sensorTemp();
 void portonUltra();
+#define DEBOUNCE_TIME 20 // Tiempo de antirrebote en ms
+volatile uint8_t debounce_flags = 0x00;
+
+void init_timer1() {
+	// Configura el Timer1 en modo CTC con un prescaler de 64
+	TCCR1B |= (1 << WGM12) | (1 << CS11) | (1 << CS10);
+
+	// Configura el valor de comparación para generar interrupciones cada ~1 ms (16 MHz / 64 / 250)
+	OCR1A = 250;
+
+	// Habilita la interrupción por comparación de Timer1
+	TIMSK1 |= (1 << OCIE1A);
+}
+
+
 
 void portonUltra() {
 	uint8_t result = read_from_slave(SLAVE1, &abierto);
@@ -132,11 +148,11 @@ void LCDcasa() {
 	LCD_Write_String("Gate:"); // Muestra la etiqueta
 	
 	// Muestra el estado del dia
-	LCD_Set_Cursor(10, 2); // Posiciona el cursor en la segunda línea del LCD
+	LCD_Set_Cursor(13, 2); // Posiciona el cursor en la segunda línea del LCD
 	LCD_Write_String("        "); // Limpia la línea
-	LCD_Set_Cursor(10, 2); // Posiciona el cursor nuevamente
+	LCD_Set_Cursor(12, 2); // Posiciona el cursor nuevamente
 	LCD_Write_String(buffer2); // Muestra el estado del portón
-	LCD_Set_Cursor(10, 1); // Posiciona el cursor nuevamente
+	LCD_Set_Cursor(13, 1); // Posiciona el cursor nuevamente
 	LCD_Write_String("Day:"); // Muestra la etiqueta
 }
 
@@ -146,17 +162,16 @@ void uartCasa() {
 		UART_send(comando);
 		UART_send_string("\r\n");
 
-		switch (comando) {
-			case 'm':
+		if (estadoVent == 1 && comando == 'm') {
 			_delay_ms(100);
 			UART_send_string("\nCambiando el estado del portón...\r\n");
 			send_to_slave(SLAVE1, 'm');
-			break;
-			case 'n':
-			UART_send_string("\nCambiando el estado del dia...\r\n");
+		}
+		else if (estadoVent == 1 && comando == 'n') {
+			UART_send_string("\nCambiando el estado del día...\r\n");
 			send_to_slave(SLAVE2, 'n');
-			break;
-			case 'o':
+		}
+		else if (estadoVent == 1 && comando == 'o') {
 			UART_send_string("\nCambiando el estado del ventilador...\r\n");
 			ventilador = !ventilador;
 			if (ventilador) {
@@ -164,37 +179,125 @@ void uartCasa() {
 				} else {
 				PORTC &= ~(1 << PORTC2); // Apaga el LED si el ventilador está apagado
 			}
-			break;
-			default:
-			UART_send_string("\nEl comando ingresado no se reconoce\n");
-			break;
 		}
-		} else {
-		//UART_send_string("No data available.\r\n");
+		else if (comando == 'x') {
+			// Cambia al estado automático (0), manual (1);
+			estadoVent = !estadoVent;
+			send_to_slave(SLAVE1,'x');
+			send_to_slave(SLAVE2,'x');
+			
+		}
+		else {
+			UART_send_string("\nEl comando ingresado no se reconoce\n");
+		}
+	}
+	else {
+		// UART_send_string("No data available.\r\n");
 	}
 }
 
+/*****************************************************************/
+void setup(){
+	// Configura PC2 como salida para el ventilador
+	DDRC |= (1 << DDC2);
 
+	// Configurar PB5, PC0, PC1, PC3 como entradas
+	DDRB &= ~(1 << DDB5);
+	DDRC &= ~((1 << DDC0) | (1 << DDC1) | (1 << DDC3));
+
+	// Habilitar pull-ups internos para PB5, PC0, PC1, PC3
+	PORTB |= (1 << PORTB5);
+	PORTC |= (1 << PORTC0) | (1 << PORTC1) | (1 << PORTC3);
+}
+
+void initPCint2(void) {
+	// Habilitar interrupciones en los botones PB5, PC0, PC1, y PC3
+	PCMSK0 |= (1 << PCINT5); // Habilitando PCINT en PB5
+	PCMSK1 |= (1 << PCINT8) | (1 << PCINT9) | (1 << PCINT11); // Habilitando PCINT en PC0, PC1, y PC3
+	PCICR |= (1 << PCIE0) | (1 << PCIE1); // Habilitando las interrupciones de los pines de PCINT[7:0] y PCINT[14:8]
+}
+
+ISR(PCINT0_vect) {
+	if (debounce_counter == 0) {
+		// Verificar cuál pin causó la interrupción para PB5
+		if (!(PINB & (1 << PB5))) {
+			debounce_flags |= (1 << 0); // Marca el botón PB5
+		}
+	}
+}
+
+ISR(PCINT1_vect) {
+	if (debounce_counter == 0) {
+		// Verificar cuál pin causó la interrupción para PC0, PC1, y PC3
+		if (!(PINC & (1 << PC0))) {
+			debounce_flags |= (1 << 1); // Marca el botón PC0
+		}
+		if (!(PINC & (1 << PC1))) {
+			debounce_flags |= (1 << 2); // Marca el botón PC1
+		}
+		if (!(PINC & (1 << PC3))) {
+			debounce_flags |= (1 << 3); // Marca el botón PC3
+		}
+	}
+}
+
+// Temporizador ISR para manejar el tiempo de antirrebote
+ISR(TIMER1_COMPA_vect) {
+	if (debounce_counter > 0) {
+		debounce_counter--;
+		if (debounce_counter == 0) {
+			// Ejecutar las acciones asociadas a los botones después de que se haya estabilizado
+			if (debounce_flags & (1 << 0)) {
+				estadoVent = !estadoVent;
+				send_to_slave(SLAVE1,'x');
+				send_to_slave(SLAVE2,'x');
+				LCD_Write_String("cambiando estado");
+				debounce_flags &= ~(1 << 0);
+			}
+			if (debounce_flags & (1 << 1)) {
+				if (estadoVent == 1){
+					send_to_slave(SLAVE1, 'm');
+					LCD_Write_String("cambiando estado");
+
+				}
+				debounce_flags &= ~(1 << 1);
+			}
+			if (debounce_flags & (1 << 2)) {
+				if (estadoVent == 1){
+				send_to_slave(SLAVE2, 'n');
+				LCD_Write_String("cambiando estado");
+
+				}
+				debounce_flags &= ~(1 << 2);
+			}
+			if (debounce_flags & (1 << 3)) {
+				ventilador = !ventilador;
+				if (ventilador && estadoVent == 1) {
+					PORTC |= (1 << PORTC2); // Enciende el LED si el ventilador está encendido
+					} else {
+					PORTC &= ~(1 << PORTC2); // Apaga el LED si el ventilador está apagado
+				}
+				debounce_flags &= ~(1 << 3);
+			}
+		}
+	}
+}
 
 int main(void) {
-	// Inicializa UART con baud rate 9600
 	UART_init(9600);
-	// Inicialización del LCD
 	initLCD8bits();
-	// Inicializa I2C a 100 kHz con prescaler 1
 	I2C_Master_Init(100000, 1);
-	// Configura LED_PIN como salida
-	DDRC |= (1 << DDC2);
+	setup();
+	initPCint2();
+	init_timer1();
+
 	sei();
 
 	while (1) {
-		//UART_send_string("Hello from ATmega328P!\r\n");
-		_delay_ms(500);
 		uartCasa();
 		sensorTemp();
 		portonUltra();
 		LCDcasa();
-		
-		_delay_ms(300); // Espera antes de la siguiente iteración
+		_delay_ms(300);
 	}
 }
