@@ -204,42 +204,84 @@ void initPCint0(void){
 	PCMSK0 |= (1 << PCINT4); // Habilitar PCINT en PB5
 	PCICR |= (1 << PCIE0) ;
 }
+
+volatile uint16_t debounce_counter_PB4 = 0;
+volatile uint16_t debounce_counter_PC0 = 0;
+volatile uint16_t debounce_counter_PC1 = 0;
+volatile uint16_t debounce_counter_PC3 = 0;
+
+void timer1_init() {
+	// Configurar Timer1 en modo CTC (Clear Timer on Compare Match)
+	TCCR1A = 0;            // Modo CTC (no PWM)
+	TCCR1B = (1 << WGM12) | (1 << CS11); // Modo CTC, prescaler 8
+	OCR1A = 19999;         // Valor de comparación para generar una interrupción cada 10 ms
+	TIMSK1 = (1 << OCIE1A); // Habilitar la interrupción por comparación de Timer1
+	sei(); // Habilitar interrupciones globales
+}
+
+ISR(TIMER1_COMPA_vect) {
+	// Incrementa los contadores de antirrebote si es necesario
+	if (debounce_counter_PB4 < 1000) {
+		debounce_counter_PB4++;
+	}
+	if (debounce_counter_PC0 < 1000) {
+		debounce_counter_PC0++;
+	}
+	if (debounce_counter_PC1 < 1000) {
+		debounce_counter_PC1++;
+	}
+	if (debounce_counter_PC3 < 1000) {
+		debounce_counter_PC3++;
+	}
+}
+
 ISR(PCINT0_vect) {
-	// Verificar cuál pin causó la interrupción para PB5
-	if (!(PINB & (1 << PINB5))) {
-			UART_send_string("PB5 presionado.\r\n");
+	// Verificar cuál pin causó la interrupción para PB4
+	if (!(PINB & (1 << PINB4))) {
+		if (debounce_counter_PB4 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
+			debounce_counter_PB4 = 0; // Reinicia el contador
+			UART_send_string("PB4 presionado.\r\n");
 			estadoVent = !estadoVent;
 			send_to_slave(SLAVE1, 'x');
 			send_to_slave(SLAVE2, 'x');
 			//LCD_Write_String("cambiando estado");
-	
+		}
 	}
 }
 
 ISR(PCINT1_vect) {
 	// Verificar cuál pin causó la interrupción para PC0, PC1, y PC3
 	if (!(PINC & (1 << PINC0))) {
-		if (estadoVent == 1) {
-			send_to_slave(SLAVE1, 'm');
-			//LCD_Write_String("cambiando estado");
-			UART_send_string("PC0 presionado.\r\n");
+		if (debounce_counter_PC0 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
+			debounce_counter_PC0 = 0; // Reinicia el contador
+			if (estadoVent == 1) {
+				send_to_slave(SLAVE1, 'm');
+				//LCD_Write_String("cambiando estado");
+				UART_send_string("PC0 presionado.\r\n");
+			}
 		}
 	}
 	if (!(PINC & (1 << PINC1))) {
-		if (estadoVent == 1) {
-			send_to_slave(SLAVE2, 'n');
-			//LCD_Write_String("cambiando estado");
-			UART_send_string("PC1 presionado.\r\n");
+		if (debounce_counter_PC1 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
+			debounce_counter_PC1 = 0; // Reinicia el contador
+			if (estadoVent == 1) {
+				send_to_slave(SLAVE2, 'n');
+				//LCD_Write_String("cambiando estado");
+				UART_send_string("PC1 presionado.\r\n");
+			}
 		}
 	}
 	if (!(PINC & (1 << PINC3))) {
-		ventilador = !ventilador;
-		if (ventilador && estadoVent == 1) {
-			PORTC |= (1 << PORTC2); // Enciende el ventilador si está activado
-			} else {
-			PORTC &= ~(1 << PORTC2); // Apaga el ventilador si está desactivado
+		if (debounce_counter_PC3 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
+			debounce_counter_PC3 = 0; // Reinicia el contador
+			ventilador = !ventilador;
+			if (ventilador && estadoVent == 1) {
+				PORTC |= (1 << PORTC2); // Enciende el ventilador si está activado
+				} else {
+				PORTC &= ~(1 << PORTC2); // Apaga el ventilador si está desactivado
+			}
+			UART_send_string("PC3 presionado.\r\n");
 		}
-		UART_send_string("PC3 presionado.\r\n");
 	}
 }
 
@@ -251,6 +293,7 @@ int main(void) {
 	setup();
 	initPCint0();
 	initPCint1();
+	timer1_init();
 
 	sei();
 
