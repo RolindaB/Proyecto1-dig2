@@ -167,11 +167,20 @@ void uartCasa() {
 				PORTC &= ~(1 << PORTC2); // Apaga el LED si el ventilador está apagado
 			}
 		}
-		else if (comando == 'x') {
+		else if (estadoVent == 1 && comando == 'x') {
 			// Cambia al estado automático (0), manual (1);
 			estadoVent = !estadoVent;
 			send_to_slave(SLAVE1,'x');
 			send_to_slave(SLAVE2,'x');
+			UART_send_string("\ncambiando estado\n");
+			
+		}
+		else if (estadoVent == 0 && comando == 'x') {
+			// Cambia al estado automático (0), manual (1);
+			estadoVent = !estadoVent;
+			send_to_slave(SLAVE1,'x');
+			send_to_slave(SLAVE2,'x');
+			UART_send_string("\ncambiando estado\n");
 			
 		}
 		else {
