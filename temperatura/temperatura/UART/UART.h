@@ -32,7 +32,7 @@ unsigned char UART_receive(void);
 int UART_available(void);
 /* Lee una cadena del buffer UART hasta que se encuentra un delimitador. */
 void UART_receive_string(char* buffer, uint8_t max_length);
-
+void writeTextUART(char* Texto);
 
 
 #endif /* UART_H_ */

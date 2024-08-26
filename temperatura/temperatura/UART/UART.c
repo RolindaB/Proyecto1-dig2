@@ -73,6 +73,15 @@ int UART_available(void) {
 	return (uart_head != uart_tail); // Retorna 1 si hay datos en el buffer, 0 si no
 }
 
+
+void writeTextUART(char* Texto){
+	uint8_t i;
+	for(i=0; Texto[i]!='\0'; i++){
+		while (!(UCSR0A & (1<<UDRE0)));
+		UDR0 = Texto[i];
+	}
+	
+}
 // Rutina de interrupción del UART
 ISR(USART_RX_vect) {
 	uint8_t next_head = (uart_head + 1) % sizeof(uart_buffer);

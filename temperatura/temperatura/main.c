@@ -3,6 +3,7 @@
 #include <util/delay.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <avr/interrupt.h>
 #include "I2C/I2C.h"   // Incluye librería I2C
 #include "UART/UART.h" // Incluye librería UART
@@ -19,16 +20,44 @@ char buffer1[16];
 char buffer2[16];
 int16_t temp_value;
 uint8_t abierto, day, ventilador,dato;
-volatile uint8_t debounce_counter = 0;
 uint8_t estadoVent =0;
+volatile uint8_t debounce_counter = 0;
+char temp2[50];
+int tempCelsius = 0;
+
 // Prototipos de funciones
 uint8_t read_temperature(uint8_t *high_byte, uint8_t *low_byte);
 void uartCasa();
 void LCDcasa();
 void sensorTemp();
 void portonUltra();
+void setup(void);
+void initPCint0(void);
+void initPCint1(void);
+void timer1_init(void);
+void diax(void);
 
 
+int main(void) {
+	cli();
+	UART_init(9600);
+	initLCD8bits();
+	I2C_Master_Init(100000, 1);
+	setup();
+	initPCint0();
+	initPCint1();
+	timer1_init();
+
+	while (1) {
+		uartCasa();
+		sensorTemp();
+		portonUltra();
+		diax();
+		LCDcasa();
+		PORTB |= (1 << PORTB5);
+		_delay_ms(300);
+	}
+}
 
 void portonUltra() {
 	uint8_t result = read_from_slave(SLAVE1, &abierto);
@@ -49,15 +78,15 @@ void diax(){
 	int day2 = (int)(day);
 	if (result == 0) {
 		if (day2 == 1) {
-			strcpy(buffer1, "on");
-			} else {
 			strcpy(buffer1, "off");
+			} else {
+			strcpy(buffer1, "on");
 		}
 		} else {
 		strcpy(buffer1, "error");
 	}
 }
-	
+
 void sensorTemp() {
 	uint8_t temp_high = 0;
 	uint8_t temp_low = 0;
@@ -69,10 +98,10 @@ void sensorTemp() {
 		snprintf(buffer, sizeof(buffer), "Temperature: %d C \n\r", temp_value / 256);
 
 		// Convierte la temperatura a grados Celsius
-		int temp2 = (int)(temp_value / 256);
+		int tempCelsius = (int)(temp_value / 256);
 
 		// Corrige la comparación para verificar si la temperatura es mayor a 20
-		if (temp2 > 20 ) {
+		if (tempCelsius > 27 ) {
 			PORTC |= (1 << PORTC2); // Enciende el LED si la temperatura es mayor a 20
 			ventilador = 1;
 			} else {
@@ -140,62 +169,65 @@ void LCDcasa() {
 	LCD_Set_Cursor(13, 2); // Posiciona el cursor nuevamente
 	LCD_Write_String(buffer1); // Muestra el estado del portón
 	LCD_Set_Cursor(13, 1); // Posiciona el cursor nuevamente
-	LCD_Write_String("Day:"); // Muestra la etiqueta
+	LCD_Write_String("Luz:"); // Muestra la etiqueta
 }
 
 void uartCasa() {
 	if (UART_available()) {
 		char comando = UART_receive();
-		UART_send(comando);
-		UART_send_string("\r\n");
+		//UART_send(comando);
+		//UART_send_string("\r\n");
 
 		if (estadoVent == 1 && comando == 'm') {
 			_delay_ms(100);
-			UART_send_string("\nCambiando el estado del portón...\r\n");
+			//UART_send_string("\nCambiando el estado del portón...\r\n");
 			send_to_slave(SLAVE1, 'm');
 		}
 		else if (estadoVent == 1 && comando == 'n') {
-			UART_send_string("\nCambiando el estado del día...\r\n");
+			//UART_send_string("\nCambiando el estado del día...\r\n");
 			send_to_slave(SLAVE2, 'n');
 		}
 		else if (estadoVent == 1 && comando == 'o') {
-			UART_send_string("\nCambiando el estado del ventilador...\r\n");
+			//UART_send_string("\nCambiando el estado del ventilador...\r\n");
 			ventilador = !ventilador;
-			if (ventilador) {
+			if (ventilador == 1 && estadoVent == 1) {
 				PORTC |= (1 << PORTC2); // Enciende el LED si el ventilador está encendido
-				} else {
+				} else if(ventilador == 0 && estadoVent == 1){
 				PORTC &= ~(1 << PORTC2); // Apaga el LED si el ventilador está apagado
 			}
 		}
-		else if (estadoVent == 1 && comando == 'x') {
+		else if (comando == 'x') {
 			// Cambia al estado automático (0), manual (1);
 			estadoVent = !estadoVent;
 			send_to_slave(SLAVE1,'x');
 			send_to_slave(SLAVE2,'x');
-			UART_send_string("\ncambiando estado\n");
 			
 		}
-		else if (estadoVent == 0 && comando == 'x') {
+		else if (comando == 'p') {
 			// Cambia al estado automático (0), manual (1);
-			estadoVent = !estadoVent;
-			send_to_slave(SLAVE1,'x');
-			send_to_slave(SLAVE2,'x');
-			UART_send_string("\ncambiando estado\n");
-			
+			send_to_slave(SLAVE2,'p');
 		}
-		else {
-			UART_send_string("\nEl comando ingresado no se reconoce\n");
+		else if (comando == 'q'){
+			int tempCelsius = (int)(temp_value / 256); // Calcula la temperatura en grados Celsius
+			sprintf(temp2, "%d", tempCelsius); // Convierte el número entero a cadena
+			writeTextUART(temp2);
+			//writeTextUART("\n");
+			//writeTextUART("25\n");
 		}
+		// 		else {
+		// 			UART_send_string("\nEl comando ingresado no se reconoce\n");
+		// 		}
 	}
-	else {
-		// UART_send_string("No data available.\r\n");
-	}
+	// 	else {
+	//			UART_send_string("No data available.\r\n");
+	// 	}
 }
 
 /*****************************************************************/
-void setup(){
+void setup(void){
 	// Configura PC2 como salida para el ventilador
 	DDRC |= (1 << DDC2);
+	DDRB |= (1 <<DDB5);
 	// Configurar PB5, PC0, PC1, PC3 como entradas
 	DDRB &= ~(1 << DDB4);
 	DDRC &= ~((1 << DDC0) | (1 << DDC1) | (1 << DDC3));
@@ -210,7 +242,7 @@ void initPCint1(void) {
 	PCICR |=  (1 << PCIE1); // Habilitar las interrupciones de los pines de PCINT[7:0] y PCINT[14:8]
 }
 void initPCint0(void){
-	PCMSK0 |= (1 << PCINT4); // Habilitar PCINT en PB5
+	PCMSK0 |= (1 << PCINT4); // Habilitar PCINT en PB4
 	PCICR |= (1 << PCIE0) ;
 }
 
@@ -246,10 +278,12 @@ ISR(TIMER1_COMPA_vect) {
 
 ISR(PCINT0_vect) {
 	// Verificar cuál pin causó la interrupción para PB4
-	if (!(PINB & (1 << PINB4))) {
+	PORTB &= ~(1<<PORTB5);
+	uint8_t puertoB = PINB;
+	if ((puertoB & (1<<PINB4))==0) {
 		if (debounce_counter_PB4 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
 			debounce_counter_PB4 = 0; // Reinicia el contador
-			UART_send_string("PB4 presionado.\r\n");
+			//UART_send_string("PB4 presionado.\r\n");
 			estadoVent = !estadoVent;
 			send_to_slave(SLAVE1, 'x');
 			send_to_slave(SLAVE2, 'x');
@@ -266,7 +300,7 @@ ISR(PCINT1_vect) {
 			if (estadoVent == 1) {
 				send_to_slave(SLAVE1, 'm');
 				//LCD_Write_String("cambiando estado");
-				UART_send_string("PC0 presionado.\r\n");
+				//UART_send_string("PC0 presionado.\r\n");
 			}
 		}
 	}
@@ -276,7 +310,7 @@ ISR(PCINT1_vect) {
 			if (estadoVent == 1) {
 				send_to_slave(SLAVE2, 'n');
 				//LCD_Write_String("cambiando estado");
-				UART_send_string("PC1 presionado.\r\n");
+				//UART_send_string("PC1 presionado.\r\n");
 			}
 		}
 	}
@@ -284,34 +318,12 @@ ISR(PCINT1_vect) {
 		if (debounce_counter_PC3 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
 			debounce_counter_PC3 = 0; // Reinicia el contador
 			ventilador = !ventilador;
-			if (ventilador && estadoVent == 1) {
+			if (ventilador == 1 && estadoVent == 1) {
 				PORTC |= (1 << PORTC2); // Enciende el ventilador si está activado
-				} else {
+				} else if(ventilador == 0 && estadoVent == 1) {
 				PORTC &= ~(1 << PORTC2); // Apaga el ventilador si está desactivado
 			}
-			UART_send_string("PC3 presionado.\r\n");
+			//UART_send_string("PC3 presionado.\r\n");
 		}
-	}
-}
-
-
-int main(void) {
-	UART_init(9600);
-	initLCD8bits();
-	I2C_Master_Init(100000, 1);
-	setup();
-	initPCint0();
-	initPCint1();
-	timer1_init();
-
-	sei();
-
-	while (1) {
-		uartCasa();
-		sensorTemp();
-		portonUltra();
-		diax();
-		LCDcasa();
-		_delay_ms(300);
 	}
 }

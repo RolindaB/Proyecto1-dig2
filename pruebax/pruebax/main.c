@@ -1,29 +1,114 @@
-//LIBRERIAS
+// LIBRERIAS
 #include <avr/io.h>
 #define F_CPU 16000000
-#include <avr/io.h>
-#include <util/delay.h>
-#include <stdint.h>
 #include <avr/interrupt.h>
+#include <stdint.h>
 #include <stdio.h>
-// #include "SETUPS/PWM/PWM1.h"
-// #include "SETUPS/PWM/PWM2.h"
 
 #include "ADC/ADC.h"
 #include "I2C/I2C.h"
 #define  slave2 0x04
 
-//VARIABLES
+// VARIABLES
 uint8_t valorADC = 0;
 uint8_t Abierto = 0;
-uint8_t day;
+uint8_t day, adentro;
 volatile uint8_t dato, estado = 0; // Variable global para almacenar datos recibidos
+volatile uint8_t debounce_flag = 0;
 
-//void initPCint0(void);
+void daySensor(void);
+void initPCint0(void);
+void initTimer0(void);
 
+int main(void) {
+	cli();
+	DDRB |= (1 << DDB5); // COLOCAR LED DEL PB5 COMO SALIDA
+	DDRD |= (1 << DDD4) | (1 << DDD3); // COLOCAR LED COMO SALIDA
+	// BOTONES
+	DDRB &= ~(1 << DDB4); // PINES B4 COMO ENTRADA
+	PORTB |= (1 << PORTB4); // PULLUPS
+	initADC();
+	initPCint0();
+	initTimer0();
+	I2C_Slave_Init(slave2);
+	sei();
+	
+	while (1) {
+		if (dato == 'x') {
+			estado = !estado;
+			dato = 0;
+		}
+		if (estado == 1 && dato == 'n') {
+			// Cambiar el estado de Abierto
+			day = !day;  // Cambia entre 0 y 1
+			if (day == 1) {
+				PORTD |= (1 << PORTD4);
+				} else {
+				PORTD &= ~(1 << PORTD4);
+			}
+			// Limpiar la variable 'dato' para evitar cambios no deseados
+			dato = 0;
+			} else if (estado == 0) {
+			daySensor();
+		}
+		if (dato == 'p') {
+			adentro = !adentro;
+			if (adentro == 1) {
+				PORTD |= (1 << PORTD3);
+				} else if (adentro == 0) {
+				PORTD &= ~(1 << PORTD3);
+			}
+		}
+		dato = 0;
+	}
+}
 
+void daySensor(void) {
+	//_delay_ms(50);
+	valorADC = ADC_CHANEL_SELECT(0);
+	
+	if (valorADC <= 70) {
+		PORTD |= (1 << PORTD4);
+		day = 0;
+		} else if (valorADC > 70) {
+		PORTD &= ~(1 << PORTD4);
+		day = 1;
+	}
+}
 
-/**********************COMUNICACION I2C*********************************/
+void initPCint0(void) {
+	PCMSK0 |= (1 << PCINT4); // INTERRUPCIONES EN EL BOTON PB4
+	PCICR |= (1 << PCIE0); // HABILITANDO LA ISR PCINT[7:0]
+}
+
+void initTimer0(void) {
+	TCCR0A = 0; // Modo normal
+	TCCR0B |= (1 << CS02) | (1 << CS00); // Prescaler de 1024
+	TIMSK0 |= (1 << TOIE0); // Habilitar interrupción por desbordamiento
+}
+
+ISR(PCINT0_vect) {
+	if (debounce_flag == 0) {
+		TCNT0 = 0; // Reinicia el contador
+		debounce_flag = 1; // Activa el flag de debounce
+	}
+}
+
+ISR(TIMER0_OVF_vect) {
+	if (debounce_flag == 1) {
+		debounce_flag = 0; // Desactiva el flag de debounce
+		if ((PINB & (1 << PINB4)) == 0) { // Si el botón sigue presionado
+			adentro = !adentro;
+			if (adentro == 1) {
+				PORTD |= (1 << PORTD3);
+				} else {
+				PORTD &= ~(1 << PORTD3);
+			}
+		}
+	}
+}
+
+/*******COMUNICACION I2C************/
 // Rutina de interrupción del TWI (I2C)
 ISR(TWI_vect) {
 	uint8_t estado = TWSR & 0xF8;  // Lee los 3 bits superiores del registro de estado
@@ -54,55 +139,5 @@ ISR(TWI_vect) {
 		default: // Manejo de errores
 		TWCR |= (1 << TWINT) | (1 << TWSTO); // Borra el flag TWINT y envía una condición de STOP
 		break;
-	}
-}
-
-void daySensor(){
-	_delay_ms(50);
-	valorADC = ADC_CHANEL_SELECT(0);
-	
-	if (valorADC <= 90  ){
-		PORTD |= (1<<PORTD4);
-		day = 0;
-		//writeTextUART("Noche");
-		}else if(valorADC > 90 ){
-		PORTD &= ~(1<<PORTD4);
-		//writeTextUART("Dia");
-		day =1;
-	}
-	
-}
-int main(void)
-{
-	cli();
-	DDRB |= (1<<DDB5);		//COLOCAR LED DEL PB5 COMO SALIDA
-	DDRD |= (1<<DDD4);		//COLOCAR LED COMO SALIDA
-	//BOTONES
-	DDRB &= ~(1<<DDB4);												//PINES B4 Y B0 COMO ENTRADAS
-	PORTB |= (1<<PORTB4);											//PULLUPS
-	initADC();
-//	initPCint0();
-	I2C_Slave_Init(slave2);
-	sei();
-	
-	while (1)
-	{
-		if(dato = 'x'){
-			estado = !estado;
-			dato = 0;
-		}
-		if (estado == 1 && dato == 'n') {
-			// Cambiar el estado de Abierto
-			day = !day;  // Cambia entre 0 y 1
-			if (day == 1) {
-				PORTD |= (1<<PORTD4);
-				} else {
-				PORTD &= ~(1<<PORTD4);
-			}
-			// Limpiar la variable 'dato' para evitar cambios no deseados
-			dato = 0;
-		} else if(estado = 0){
-			daySensor();
-		}
 	}
 }
