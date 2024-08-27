@@ -101,10 +101,10 @@ void sensorTemp() {
 		int tempCelsius = (int)(temp_value / 256);
 
 		// Corrige la comparación para verificar si la temperatura es mayor a 20
-		if (tempCelsius > 27 ) {
+		if (  estadoVent == 0 &&  tempCelsius > 24 ) {
 			PORTC |= (1 << PORTC2); // Enciende el LED si la temperatura es mayor a 20
 			ventilador = 1;
-			} else {
+			} else if( estadoVent == 0 &&  tempCelsius < 24) {
 			PORTC &= ~(1 << PORTC2); // Apaga el LED si la temperatura es 20 o menor
 			ventilador =0;
 		}
@@ -318,9 +318,9 @@ ISR(PCINT1_vect) {
 		if (debounce_counter_PC3 >= 50) { // Considera la pulsación si han pasado al menos 20 ms
 			debounce_counter_PC3 = 0; // Reinicia el contador
 			ventilador = !ventilador;
-			if (ventilador == 1 && estadoVent == 1) {
+			if (estadoVent == 1 && ventilador == 1) {
 				PORTC |= (1 << PORTC2); // Enciende el ventilador si está activado
-				} else if(ventilador == 0 && estadoVent == 1) {
+				} else if(estadoVent == 1 && ventilador == 0) {
 				PORTC &= ~(1 << PORTC2); // Apaga el ventilador si está desactivado
 			}
 			//UART_send_string("PC3 presionado.\r\n");

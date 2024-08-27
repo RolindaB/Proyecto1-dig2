@@ -7,10 +7,10 @@
 #include "I2C/I2C.h"
 
 // Variables
-#define TRIG_PIN PD2
-#define ECHO_PIN PD3
-#define OUT_PIN PD4 // No se usa en el código proporcionado
-#define LED_PIN PC3 // Asumiendo que el LED está conectado al pin PC3
+#define TRIG_PIN PORTD2
+#define ECHO_PIN PORTD3
+#define OUT_PIN PORTD4 // No se usa en el código proporcionado
+#define LED_PIN PORTC3 // Asumiendo que el LED está conectado al pin PC3
 volatile uint8_t dato = 0; // Variable global para almacenar datos recibidos
 volatile uint8_t Abierto, estado = 0; // Estado inicial del servo cerrado
 #define SLAVE_ADDR 0x02  // Dirección del esclavo
@@ -120,15 +120,16 @@ void loop() {
 		UART_send_string(duration_str);
 
 		// Ajustar umbrales según la duración filtrada
-		if (duration <= 176) {
+		if (duration <= 58) {
 			Abierto = 1;
 			PORTC |= (1 << LED_PIN); // Enciende el LED
-			updateDutyCycleB0(120);  // Mover servo al estado abierto
+			updateDutyCycleB0(150);  // Mover servo al estado abierto
+			_delay_ms(3000);
 			UART_send_string("\n\rLED Encendido y Servo Abierto\n\r");
-			} else if (duration > 186) {
+			} else if (duration > 68) {
 			Abierto = 0;
 			PORTC &= ~(1 << LED_PIN); // Apaga el LED
-			updateDutyCycleB0(0);    // Mover servo al estado cerrado
+			updateDutyCycleB0(25);    // Mover servo al estado cerrado
 			UART_send_string("\n\rLED Apagado y Servo Cerrado\n\r");
 		}
 	}
@@ -140,7 +141,7 @@ int main(void) {
 	setup();
 	I2C_Slave_Init(SLAVE_ADDR); // Inicializa el esclavo I2C
 	sei(); // Habilitar interrupciones
-	updateDutyCycleB0(0);
+	//updateDutyCycleB0(0);
 	while (1) {
 		if (dato == 'x')
 		{
@@ -152,11 +153,11 @@ int main(void) {
 			Abierto = !Abierto;  // Cambia entre 0 y 1
 			if (Abierto == 1) {
 				PORTC |= (1 << LED_PIN); // Enciende el LED
-				updateDutyCycleB0(120);  // Mover servo al estado abierto
+				updateDutyCycleB0(150);  // Mover servo al estado abierto
 				UART_send_string("\n\rServo Abierto\n\r");
 				} else {
 				PORTC &= ~(1 << LED_PIN); // Apaga el LED
-				updateDutyCycleB0(0);    // Mover servo al estado cerrado
+				updateDutyCycleB0(40);    // Mover servo al estado cerrado
 				UART_send_string("\n\rServo Cerrado\n\r");
 			}
 			// Limpiar la variable 'dato' para evitar cambios no deseados
