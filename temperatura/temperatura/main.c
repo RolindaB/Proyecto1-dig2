@@ -285,8 +285,8 @@ ISR(PCINT0_vect) {
 			debounce_counter_PB4 = 0; // Reinicia el contador
 			//UART_send_string("PB4 presionado.\r\n");
 			estadoVent = !estadoVent;
-			send_to_slave(SLAVE1, 'x');
-			send_to_slave(SLAVE2, 'x');
+			//send_to_slave(SLAVE1, 'x');
+			//send_to_slave(SLAVE2, 'x');
 			//LCD_Write_String("cambiando estado");
 		}
 	}
